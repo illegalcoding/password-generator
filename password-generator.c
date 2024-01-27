@@ -48,6 +48,10 @@ int* rand_starts;
 int* rand_ends;
 int rand_starts_counter = 0;
 int rand_ends_counter = 0;
+int* mod_starts;
+int* mod_ends;
+int mod_starts_counter = 0;
+int mod_ends_counter = 0;
 int password_counter = 0;
 int num_threads = 0;
 int threads_started = 0;
@@ -59,6 +63,10 @@ struct passgen_args {
 	int pass_end_index;
 	int rand_start_index;
 	int rand_end_index;
+};
+struct mod_buf_args {
+	int start_index;
+	int end_index;
 };
 void usage();
 void* generate_passwords(void* args);
@@ -171,10 +179,52 @@ void rand_split_range(int num_threads, size_t bufsz) {
 		}
 	}
 }
+void mod_split_range(int num_threads, size_t bufsz) {
+	int split_range = floor((int)(bufsz/num_threads));
+	int start_index = 0;
+	int end_index = 0;
+	int abs_end_index = bufsz-1;
+	int last_end_index = 0;
+	for(int i = 0; i<num_threads; i++) {
+		if(i == 0) {
+			start_index = 0;
+			end_index = start_index+split_range;
+
+			mod_starts[mod_starts_counter] = start_index;
+			mod_ends[mod_ends_counter] = end_index;
+		
+			mod_starts_counter++;
+			mod_ends_counter++;
+			last_end_index = end_index;
+		} else {
+			start_index = last_end_index+1;
+			end_index = start_index+split_range;
+			if(end_index > abs_end_index) {
+				end_index = abs_end_index;
+			}
+
+			mod_starts[mod_starts_counter] = start_index;
+			mod_ends[mod_ends_counter] = end_index;
+		
+			mod_starts_counter++;
+			mod_ends_counter++;
+			last_end_index = end_index;
+		}
+	}
+}
 void print_passwords(int amount) {
 	for(int i = 0; i<amount; i++) {
 		fprintf(stderr, "passwords[%d]: %s\n",i,passwords[i]);
 	}
+}
+void* mod_buf(void* argsptr) {
+	struct mod_buf_args* args = (struct mod_buf_args*)argsptr;
+	int start_index = args->start_index;
+	int end_index = args->end_index;	
+	for(int i = start_index; i<=end_index; i++) {
+		buf[i] = buf[i] % CHARSET_SIZE;
+	}
+	return 0;
 }
 int main(int argc, char** argv) {
 	if(argc != 4) {
@@ -189,9 +239,23 @@ int main(int argc, char** argv) {
 	size_t buf_size = length*amount*sizeof(uint8_t);
 	buf = malloc(buf_size);
 	arc4random_buf(buf,buf_size);
-	for(int i = 0; i<buf_size;i++) {
-		buf[i] = buf[i] % CHARSET_SIZE;
+
+	mod_starts = malloc(num_threads*sizeof(int));
+	mod_ends = malloc(num_threads*sizeof(int));
+	mod_split_range(num_threads, buf_size);
+	pthread_t mod_threads[num_threads];
+	for(int i = 0;i<num_threads;i++) {
+		struct mod_buf_args* args = malloc(sizeof(struct mod_buf_args));
+		args->start_index = mod_starts[i];
+		args->end_index = mod_ends[i];
+		pthread_create(&mod_threads[i],NULL,mod_buf,(void*)args);
 	}
+	for(int i = 0; i<num_threads;i++) {
+		pthread_join(mod_threads[i],NULL);
+	}
+	/* for(int i = 0; i<buf_size;i++) { */
+	/* 	buf[i] = buf[i] % CHARSET_SIZE; */
+	/* } */
 
 	passwords = malloc(amount*sizeof(char*));
 	pass_starts = malloc(num_threads*sizeof(int));
@@ -218,6 +282,8 @@ int main(int argc, char** argv) {
 	free(pass_ends);
 	free(rand_starts);
 	free(rand_ends);
+	free(mod_starts);
+	free(mod_ends);
 	free(buf);
 	clock_gettime(CLOCK_REALTIME,&no_io);
 	FILE* file_out = fopen(FILENAME, "w");
