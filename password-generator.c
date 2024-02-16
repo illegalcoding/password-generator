@@ -31,13 +31,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <math.h>
 #include <pthread.h>
+#include <stdint.h>
 
-char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ()!#?-_*.,&:+"; // 65 chars
+char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()!#?-_*.,&:+"; // 75 chars
 struct timespec prog_start;
 struct timespec prog_end;
 struct timespec no_io;
 #define FILENAME "passwords.txt"
-#define CHARSET_SIZE 65
+#define CHARSET_SIZE 75
 #define RANDINDEX rand_start_index+randcounter
 char** passwords;
 int* pass_starts;
